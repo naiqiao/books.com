@@ -1,0 +1,397 @@
+{namespace helpers}
+
+/**
+ * Header for all pages.
+ * @param logo
+ * @param base
+ * @param crumbNames
+ * @param crumbUrls
+ */
+{template .header}
+  <header>
+    <div id="company-logo" class="inner-wrapper">
+      {if $logo}<img src="{$logo}">{/if}
+    </div>
+    <nav id="breadcrumbs">
+      <div class="inner-wrapper">
+        {call helpers.breadcrumb data="all" /}
+      </div>
+    </nav>
+  </header>
+{/template}
+
+/**
+ * @param base
+ * @param crumbNames
+ * @param crumbUrls
+ */
+{template .breadcrumb}
+  {foreach $name in $crumbNames}
+   {if not isFirst($name)} <span class="breadcrumb-separator">&#x232a;</span> {/if}
+    <a { if isLast($name) }class="selected" {/if}href="{$base}{$crumbUrls[index($name)]}">{isFirst($name) ? 'Locations' : $name  }</a>
+  {/foreach}
+{/template}
+
+/**
+ * Format a location address.
+ * Generates a formatted address based on the options
+ * specified as paramaters in the soy template call.
+ *
+ * Tag configuration:
+ * @param includeCountry Include the country in the address? ('yes', 'no', or 'non-US')
+ * @param stateAbbr Abbreviate the state (region)? (true, false)
+ * @param schemaOrg Include schema.org tags? (true, false)
+ *
+ * Location fields:
+ * @param address1 Contains the street address
+ * @param address2 Contains the second line of the street address
+ * @param city
+ * @param state The abbreviated format of a state
+ * @param postalCode
+ * @param country Abbreviated format of a state
+ */
+{template .address}
+  <div class="address" {if $schemaOrg}itemscope itemtype="http://schema.org/PostalAddress"{/if}>
+    {if $includeCountry != 'no'}
+      {if $includeCountry == 'non-us'}
+        {if $country != 'US'}
+          <span {if $schemaOrg}itemprop="addressCountry"{/if}>{$country}</span>
+          <br>
+        {/if}
+      {else}false
+        <span class="country-name" {if $schemaOrg}itemprop="addressCountry"{/if}>{$country}</span>
+        <br>
+      {/if}
+    {/if}
+    <span class="street-address" {if $schemaOrg}itemprop="streetAddress"{/if}>{$address1}</span>
+    <br>
+    {if $address2}
+      <span class="street-address" {if $schemaOrg}itemprop="streetAddress"{/if}>{$address2}</span>
+      <br>
+    {/if}
+    <span class="city" {if $schemaOrg}itemprop="addressLocality"{/if}>{$city}</span>,{sp}
+    <span class="state" {if $schemaOrg}itemprop="addressRegion"{/if}>
+      {$state|stateAbbr:$stateAbbr}
+    </span>
+    <span class="postal-code" {if $schemaOrg}itemprop="postalCode"{/if}> {$postalCode}</span>
+  </div>
+{/template}
+
+/**
+ * Format a set of Hours.
+ *
+ * This can be used to format the official location hours ($hours) or custom
+ * fields of type "Hours" or "Daily times"
+ *
+ * For example:
+ * {call helpers.hours data="$hours"}
+ *   {param format: 'table'/}
+ *   {param collapseDays: false/}
+ *   {param todayOnly: false/}
+ *   {param schemOrg: true/}
+ * {/call}
+ *
+ * or to format a custom field, ID 1160:
+ * {call helpers.hours data="$custom['1160']"}
+ *   ...
+ * {/call}
+ *
+ * Hours fields:
+ * @param days The location hours to format.
+ *  param? additionalText (not present for daily times)
+ *
+ * Tag configuration:
+ * @param format Formatting options ('short', 'list', or 'table')
+ * @param collapseDays Collapse consecutive days with the same hours? (true/false)
+ * @param todayOnly Only show today's hours? (true/false)
+ * @param schemaOrg Include schema.org tags? (true/false)
+ */
+{template .hours}
+  {let $hours: $collapseDays and not $todayOnly ? collapseDays($days) : $days /}
+  {switch $format}
+  {case 'table'}
+    {call .hoursTable data="all"}
+      {param hours: $hours/}
+    {/call}
+  {case 'list'}
+    {call .hoursList data="all"}
+      {param hours: $hours/}
+    {/call}
+  {case 'short'}
+    {call .hoursShort data="all"}
+      {param hours: $hours/}
+    {/call}
+  {/switch}
+
+  {if $todayOnly}
+    {literal}
+      <script type="text/javascript">
+        var d = ((new Date()).getDay() - 1) % 7;
+        for (var i = 0; i < 7; i ++) {
+          if (i == d) {
+            var elements = document.getElementsByClassName('week-' + i);
+            for(var j = 0; j < elements.length; j++) {
+              elements[j].childNodes[0].innerHTML='Today';
+              elements[j].childNodes[1].className += ' ' + 'today-hours';
+              elements[j].style.display = 'table-row';
+            }
+          }
+        }
+      </script>
+    {/literal}
+  {/if}
+{/template}
+
+/**
+ * @param hours
+ * @param todayOnly
+ * @param schemaOrg
+ */
+{template .hoursTable}
+  {let $week : [
+    'MONDAY':    'Monday',
+    'TUESDAY':   'Tuesday',
+    'WEDNESDAY': 'Wednesday',
+    'THURSDAY':  'Thursday',
+    'FRIDAY':    'Friday',
+    'SATURDAY':  'Saturday',
+    'SUNDAY':    'Sunday'
+  ]/}
+  <table class="hours">
+  {foreach $day in $hours}
+    <tr class ="week-{index($day)}" {if $todayOnly}style="display:none;"{/if}>
+      <td style="vertical-align:top">
+        {if $schemaOrg}{call .schemaHours data="$day"/}{/if}
+        {$week[$day.day]}{if $day.through}-{$week[$day.through]}{/if}
+      </td>
+      <td class="hours">
+        {if $day.time}
+          {call .dailyTime data="$day"/}
+        {elseif $day.intervals and length($day.intervals) > 0}
+          {foreach $interval in $day.intervals}
+            {if not isFirst($interval)}
+              {sp}and{sp}
+            {/if}
+            {call .interval data="$interval"/}<br>
+          {/foreach}
+        {else}
+          Closed
+        {/if}
+      </td>
+    </tr>
+  {/foreach}
+  </table>
+{/template}
+
+/**
+ * @param hours
+ * @param todayOnly
+ * @param schemaOrg
+ */
+{template .hoursList}
+  {let $week : [
+    'MONDAY':    'Monday',
+    'TUESDAY':   'Tuesday',
+    'WEDNESDAY': 'Wednesday',
+    'THURSDAY':  'Thursday',
+    'FRIDAY':    'Friday',
+    'SATURDAY':  'Saturday',
+    'SUNDAY':    'Sunday'
+  ]/}
+  <ul class="hours">
+    {foreach $day in $hours}
+      <li class="week-{index($day)}" {if $todayOnly}style="display:none;"{/if}>
+        {if $schemaOrg}{call .schemaHours data="$day"/}{/if}
+        {$week[$day.day]}{if $day.through}-{$week[$day.through]}{/if}
+        {sp}
+        {if $day.time}
+          {call .dailyTime data="$day"/}
+        {elseif $day.intervals and length($day.intervals) > 0}
+          {foreach $interval in $day.intervals}
+            {if not isFirst($interval)}
+              ,{sp}
+            {/if}
+            {call .interval data="$interval"/}
+          {/foreach}
+        {else}
+          Closed
+        {/if}
+      </li>
+    {/foreach}
+  </ul>
+{/template}
+
+/**
+ * @param hours
+ * @param todayOnly
+ * @param schemaOrg
+ */
+{template .hoursShort}
+  {let $abbr : [
+    'MONDAY':    'M',
+    'TUESDAY':   'Tu',
+    'WEDNESDAY': 'W',
+    'THURSDAY':  'Th',
+    'FRIDAY':    'F',
+    'SATURDAY':  'Sa',
+    'SUNDAY':    'Su'
+  ]/}
+  {foreach $day in $hours}
+    <span class="week-{index($day)}" {if $todayOnly}style="display:none;"{/if}>
+      {if $schemaOrg}{call .schemaHours data="$day"/}{/if}
+      {$abbr[$day.day]}{if $day.through}-{$abbr[$day.through]}{/if}{sp}
+      {if $day.time}
+        {call .dailyTime data="$day"/}
+      {elseif $day.intervals and length($day.intervals) > 0}
+        {foreach $interval in $day.intervals}
+          {if not isFirst($interval)}
+            ,{sp}
+          {/if}
+          {call .interval data="$interval"/}
+        {/foreach}
+      {else}
+        Closed
+      {/if}
+      {if not isLast($day) and not $todayOnly}
+        ,{sp}
+      {/if}
+    </span>
+  {/foreach}
+{/template}
+
+
+/**
+ * @param day
+ * @param? through
+ * @param intervals
+ */
+{template .schemaHours}
+  {let $weekschema: [
+    'MONDAY':    'Mo',
+    'TUESDAY':   'Tu',
+    'WEDNESDAY': 'We',
+    'THURSDAY':  'Th',
+    'FRIDAY':    'Fr',
+    'SATURDAY':  'Sa',
+    'SUNDAY':    'Su'
+  ]/}
+  {if $intervals}
+    {let $interval: $intervals[0]/}
+    {if $interval and $interval.start and $interval.end}
+      <meta itemprop="openingHours" content="
+        {$weekschema[$day]}{if $through}-{$weekschema[$through]}{/if}{sp}
+          {timef('15:04', $interval.start)}-{timef('15:04', $interval.end)}
+      ">
+    {/if}
+  {/if}
+{/template}
+
+/**
+ * Formats an interval as e.g. "9AM-3:30PM"
+ * @param start
+ * @param end
+ */
+{template .interval}
+  {if $start == 0 and $end == 0}
+    Open 24 hours
+  {else}
+    {timef($start % 100 == 0 ? '3PM' : '3:04PM', $start)}-
+    {timef($end % 100 == 0 ? '3PM' : '3:04PM', $end)}
+  {/if}
+{/template}
+
+/** @param time */
+{template .dailyTime}
+  {if $time == -1}
+    None
+  {else}
+    {timef('3:04PM', $time)}
+  {/if}
+{/template}
+
+/**
+ * Displays the calendar widget
+ * @param calendars
+ */
+{template .calendars}
+  {foreach $calendar in $calendars}
+    <div class="calendar">
+      {foreach $section in $calendar.sections}
+        {foreach $event in $section.items}
+          {call .calendarEvent data="$event" /}
+        {/foreach}
+      {/foreach}
+    </div>
+  {/foreach}
+{/template}
+
+/**
+ * Displays one calendar event.
+ * @param type
+ * @param start
+ * @param end
+ * @param gallery
+ * @param videoUrl
+ * @param url
+ * @param name
+ * @param description
+ */
+{template .calendarEvent}
+  <div class="event">
+    {call .startEndTime data="all" /}
+    <div class="event-name">
+      {$name}
+    </div>
+    <div class="event-type">
+      {$type}
+    </div>
+    {if length($gallery) > 0 or $videoUrl}
+      <div class="event-fotorama fotorama">
+        {foreach $image in $gallery}
+          {if length($image.sizes) > 0}
+            <img src="{$image.sizes[0].url}">
+          {/if}
+        {/foreach}
+        {if $videoUrl}
+          <a href="{$videoUrl}">Error loading video</a>
+        {/if}
+      </div>
+    {/if}
+    <div class="event-description">
+      {$description}
+    </div>
+    {if $url}
+      <div class="event-url-wrapper">
+        <a class="event-url" href="{$url}">More info</a>
+      </div>
+    {/if}
+  </div>
+{/template}
+
+/**
+ * Makes the date header for calendar events. Changes based on the start and end time.
+ * @param start
+ * @param end
+ */
+{template .startEndTime}
+  <div class="event-date">
+    {if not $end or sameDay($start, $end)}
+      {timestampf('Jan 2, 2006', $start)}
+    {elseif sameYear($start, $end)}
+      {timestampf('Jan 2', $start)} - {timestampf('Jan 2, 2006', $end)}
+    {else}
+      {timestampf('Jan 2, 2006', $start)} - {timestampf('Jan 2, 2006', $end)}
+    {/if}
+  </div>
+  <div class="event-divider"></div>
+  <div class="event-time">
+    {if not $end}
+      {timestampf('3:04PM', $start)}
+    {elseif sameDay($start, $end)}
+      {timestampf('3:04PM', $start)} - {timestampf('3:04PM', $end)}
+    {else}
+      {timestampf('01/02/2006', $start)} {timestampf('3:04PM', $start)} -{sp}
+      {timestampf('01/02/2006', $end)} {timestampf('3:04PM', $end)}
+    {/if}
+  </div>
+{/template}
