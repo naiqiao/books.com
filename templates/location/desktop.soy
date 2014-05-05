@@ -30,6 +30,7 @@
  * @param bios
  * @param nearbyLocations
  * @param? listings
+ * @param? labelPhotos
  */
 {template .default}
 <!doctype html>
@@ -53,6 +54,9 @@
     <div class="inner-wrapper">
       <section id="location-info">
         <article id="contact-info">
+          {foreach $photo in $labelPhotos['dog']}
+            <img src="{$photo.url}" />
+          {/foreacch}
           <h1>{$name}</h1>
           {call helpers.address data="all"}
             {param includeCountry: 'non-us' /}
